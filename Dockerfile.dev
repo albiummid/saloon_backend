@@ -1,0 +1,62 @@
+# Use official Node.js LTS image as the base image
+FROM node:20-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm install
+
+# Copy source files
+COPY . .
+
+# Ensure TypeScript is properly configured
+RUN npx tsc --init || echo "TypeScript config already exists"
+
+# Build stage (if needed)
+# RUN npm run build
+
+# Final image
+FROM node:20-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install global dependencies (as root)
+RUN npm install -g typescript ts-node nodemon
+
+# Create a non-root user and switch to it
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy from builder stage
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/package*.json ./
+COPY --from=builder --chown=appuser:appgroup /app/src ./src
+COPY --from=builder --chown=appuser:appgroup /app/tsconfig.json ./tsconfig.json
+COPY --from=builder --chown=appuser:appgroup /app/*.js ./
+
+# Add metadata
+LABEL maintainer="Baba Coiffure"
+LABEL version="1.0"
+LABEL description="Development environment for Baba Coiffure backend"
+
+# Expose the port your app runs on
+EXPOSE 3000
+
+# Health check - commented out until the /health endpoint is implemented
+# HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+#   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Switch to non-root user
+USER appuser
+
+# Note: Environment variables should be passed at runtime using:
+# docker run -p 3000:3000 --env-file .env.dev baba-coiffure-backend-dev
+# Or individually with -e flags:
+# docker run -p 3000:3000 -e ACCESS_TOKEN_PRIVATE_KEY=value -e ACCESS_TOKEN_PUBLIC_KEY=value ... baba-coiffure-backend-dev
+
+# Run the application in development mode
+CMD ["npm", "run", "dev"] 

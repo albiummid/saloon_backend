@@ -8,9 +8,9 @@ import { paymentRouter } from "./routes/payment.router";
 import { providerScheduleRouter } from "./routes/provider-schedule.route";
 import { providerServiceRouter } from "./routes/provider-service.route";
 import { subscriptionRouter } from "./routes/subscription.route";
+import { userNotificationRouter } from "./routes/user-notification.route";
 import { userRestrictionRouter } from "./routes/user-restriction.route";
 import { userRouter } from "./routes/user.route";
-import { userNotificationRouter } from "./routes/user-notification.route";
 
 const rootRouter = Router();
 
@@ -28,12 +28,13 @@ v1Router.use("/appointment", appointmentRouter);
 v1Router.use("/payment", paymentRouter);
 v1Router.use("/subscription", subscriptionRouter);
 v1Router.use("/user-notification", userNotificationRouter);
+
 // health check
 v1Router.get("/health-check", (req, res) => {
-    res.status(200).json({
-        success: true,
-        status: "OK",
-    });
+	res.status(200).json({
+		success: true,
+		status: "OK",
+	});
 });
 
 // Register version specific router

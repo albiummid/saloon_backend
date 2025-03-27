@@ -1,0 +1,40 @@
+# Node.js dependencies and build artifacts
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Git and version control
+.git
+.gitignore
+.github
+
+# Development and editor files
+.vscode
+*.md
+!README.md
+
+# Test files
+__tests__
+*.test.js
+*.spec.js
+
+# Logs
+logs
+*.log
+
+# Temporary files
+tmp
+temp
+
+# Build output
+dist
+
+# Other
+.DS_Store
+Thumbs.db 

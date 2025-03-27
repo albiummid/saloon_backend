@@ -8,15 +8,8 @@ import {
 } from "../../controllers/user.controller";
 export const userRouter = Router();
 
-// Set up storage engine with multer
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.resolve(__dirname, "..", "..", "..", "uploads")); // Specify the destination folder
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname)); // Append the original extension
-    },
-});
+// Use memory storage instead of disk storage to avoid filesystem issues
+const storage = multer.memoryStorage();
 
 // Initialize upload variable with multer
 const upload = multer({

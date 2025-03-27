@@ -1,4 +1,29 @@
-name: Backend Deploy Workflow
+name: PREPROD - Deploy image to container registry
+
+env:
+  DB_USER: root
+  DB_USERNAME: root
+  DB_PASSWORD: root
+  DB_HOST: 127.0.0.1
+  DB_PORT: 3306
+  DB_DATABASE: babacoiffure_db
+  STRIPE_KEY: ${{ secrets.STRIPE_KEY }}
+  JWT_SECRET: KC6UyRtBW0Xm5yz4GMuWUwCY0hnTIA0NzwQBljqR2hyltM8d4O
+  ENV_TYPE: DEV
+  MINIO_USE_SSL: true
+  Database_URI: mongodb://localhost:27017/saloon_db
+  ACCESS_TOKEN_PRIVATE_KEY: ${{ secrets.ACCESS_TOKEN_PRIVATE_KEY }}
+  ACCESS_TOKEN_PUBLIC_KEY: ${{ secrets.ACCESS_TOKEN_PUBLIC_KEY }}
+  REFRESH_TOKEN_PRIVATE_KEY: ${{ secrets.REFRESH_TOKEN_PRIVATE_KEY }}
+  REFRESH_TOKEN_PUBLIC_KEY: ${{ secrets.REFRESH_TOKEN_PUBLIC_KEY }}
+  CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+  CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+  CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+  CLOUDINARY_API_ENVIRONMENT_VARIABLE: ${{ secrets.CLOUDINARY_API_ENVIRONMENT_VARIABLE }}
+  NODEMAILER_GMAIL_ID: ${{ secrets.NODEMAILER_GMAIL_ID }}
+  NODEMAILER_GMAIL_APP_PASSWORD: ${{ secrets.NODEMAILER_GMAIL_APP_PASSWORD }}
+  TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
+  STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
 
 on:
   push:
@@ -9,86 +34,92 @@ on:
       - "main"
 
 jobs:
-  build_and_deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Extract repository name
-        run: echo "REPO_NAME=$(echo ${GITHUB_REPOSITORY##*/})" >> $GITHUB_ENV
-
-      - name: Login to Container Registry
-        run: docker login ${{ secrets.CONTAINER_REGISTRY }} -u nologin --password-stdin <<< ${{ secrets.REGISTRY_API_KEY }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GIT_TOKEN }}
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.CONTAINER_REGISTRY }}/saloon-backend:${{ github.sha }}
-            ${{ secrets.CONTAINER_REGISTRY }}/saloon-backend:latest
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-            NODE_ENV=production
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
-
-      - name: Move Docker cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+  # test:
+  #   runs-on: ubuntu-latest
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v2
+  #
+  #     - name: Start MySQL in Docker
+  #       run: |
+  #         docker run --name mysql -e MYSQL_ROOT_PASSWORD=${{ env.DB_PASSWORD }} -e MYSQL_DATABASE=${{ env.DB_DATABASE }} -p 3306:3306 -d mysql:8
+  #
+  #     - name: Wait for MySQL to be ready
+  #       run: |
+  #         for i in {1..60}; do
+  #           if docker exec mysql mysqladmin ping -h127.0.0.1 -P3306 -uroot -p${{ env.DB_PASSWORD }} --silent; then
+  #             echo "MySQL is ready!"
+  #             break
+  #           fi
+  #           echo "Waiting for MySQL to be ready... Attempt $i"
+  #           sleep 10
+  #         done
+  #
+  #     - name: Set up Go
+  #       uses: actions/setup-go@v2
+  #       with:
+  #         go-version: 1.23
+  #
+  #     - name: Cache Go modules
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: |
+  #           ~/.cache/go-build
+  #           ~/go/pkg/mod
+  #         key: ${{ runner.os }}-go-${{ hashFiles('**/go.mod') }}
+  #         restore-keys: |
+  #           ${{ runner.os }}-go-
+  #
+  #     - name: Test
+  #       run: go test -count=1 -v ./...
+  #
+  #     - name: Cleanup MySQL
+  #       run: |
+  #         docker stop mysql
+  #         docker rm mysql
 
   deploy:
+    # needs: test
     runs-on: ubuntu-latest
-    needs: build_and_deploy
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+
     steps:
-      - name: Deploy to Server
-        uses: appleboy/ssh-action@master
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Extract name and version
+        run: |
+          echo "REPO_NAME=$(echo ${{ github.repository }} | cut -d '/' -f 2)" >> $GITHUB_ENV
+          echo "VERSION=$(echo preprod)" >> $GITHUB_ENV
+      - name: connect to docker
+        run: docker login ${{ secrets.CONTAINER_REGISTERY }} -u nologin --password-stdin <<< ${{ secrets.SCW_SECRET_KEY }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        uses: docker/build-push-action@v5
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            # Pull the latest image
-            docker pull ${{ secrets.CONTAINER_REGISTRY }}/saloon-backend:latest
+          context: .
+          push: true
+          tags: ${{ secrets.CONTAINER_REGISTERY }}/backend_v2:preprod
+          platforms: linux/amd64
 
-            # Stop and remove existing container if it exists
-            docker stop saloon-backend || true
-            docker rm saloon-backend || true
-
-            # Run new container
-            docker run -d \
-              --name saloon-backend \
-              -p 3000:3000 \
-              -e MONGODB_URI=${{ secrets.MONGODB_URI }} \
-              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
-              -e CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }} \
-              -e CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }} \
-              -e CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }} \
-              -e STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }} \
-              ${{ secrets.CONTAINER_REGISTRY }}/saloon-backend:latest
-
-            # Optional: Prune old images to save space
-            docker image prune -f
+  update:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Use CLI
+        uses: scaleway/action-scw@v0
+        id: cli
+        with:
+          save-config: true
+          export-config: true
+          version: v2.13.0
+          access-key: ${{ secrets.SCW_ACCESS_KEY }}
+          secret-key: ${{ secrets.SCW_SECRET_KEY }}
+          default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
+          default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
+          args: container container deploy ${{ secrets.SERVERLESS_ID }}
